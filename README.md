@@ -7,6 +7,7 @@ Hardware implementation of Number Theoretic Transform (NTT) accelerators using V
 Quantum computing threatens current cryptographic algorithms, driving the transition to Post-Quantum Cryptography (PQC), predominantly lattice-based schemes. The primary computational bottleneck in these algorithms is polynomial multiplication. While the Number Theoretic Transform (NTT) reduces the asymptotic complexity of polynomial multiplication, software implementations remain too slow for edge devices and high-throughput systems. 
 
 This repository provides hardware acceleration for NTT on FPGAs, exploring the absolute operating limits of NTT hardware and establishing ideal tradeoffs between time (latency) and space (area).
+![Core Math Problems](docs/diagrams/core_math_problems.png)
 
 ## Mathematical Background
 
@@ -14,46 +15,13 @@ Polynomial multiplication in lattice-based cryptography is evaluated over a poly
 
 Instead of computing the convolution in $O(n^2)$ time in the coefficient domain, the NTT evaluates the polynomials at $n$ distinct roots of unity in $O(n \log n)$ time. Multiplication is then performed component-wise in $O(n)$ time, followed by an Inverse NTT (INTT) to recover the coefficients.
 
-```mermaid
-flowchart LR
-    A[Polynomial a] --> NTT_A[Forward NTT\nCooley-Tukey]
-    B[Polynomial b] --> NTT_B[Forward NTT\nCooley-Tukey]
-    
-    NTT_A --> PWM[Point-wise\nMontgomery Mult]
-    NTT_B --> PWM
-    
-    PWM --> INTT[Inverse NTT\nGentleman-Sande]
-    INTT --> C[Result c]
-```
+![Convolution Theory](docs/diagrams/convolution_theory.png)
 
 ## Hardware Architecture
 
 The core of the NTT computation relies on the butterfly network. The forward transform utilizes the Cooley-Tukey (CT) butterfly, while the inverse transform applies the Gentleman-Sande (GS) butterfly. 
 
-```mermaid
-flowchart TD
-    subgraph Cooley-Tukey Butterfly
-    direction LR
-    A[a] --> Sum1((+))
-    B[b] --> Mult1((× ω))
-    Mult1 --> Sum1
-    A --> Sub1(( - ))
-    Mult1 --> Sub1
-    Sum1 --> Out1[a + bω]
-    Sub1 --> Out2[a - bω]
-    end
-
-    subgraph Gentleman-Sande Butterfly
-    direction LR
-    C[a] --> Sum2((+))
-    D[b] --> Sub2(( - ))
-    C --> Sub2
-    D --> Sum2
-    Sum2 --> Out3[a + b]
-    Sub2 --> Mult2((× ω))
-    Mult2 --> Out4["(a - b)ω"]
-    end
-```
+![Butterfly Network](docs/diagrams/butterfly_networks.png)
 
 ### Montgomery Modular Multiplication
 To optimize the finite field arithmetic, the design operates in the Montgomery domain. All twiddle factors ($\omega$) are scaled, and multiplication with $R$ is performed to exit the Montgomery domain, reducing overall area consumption compared to standard division-based modulo reduction.
@@ -69,29 +37,7 @@ A streaming architecture designed to minimize area while maintaining high throug
 - **Performance**: Achieves an area reduction of nearly 20× compared to Toom-Cook and up to 75× compared to TMVP-5. Utilizing approximately 2400 LUTs at $N=256$, it maintains a constant throughput of 200M.
 - **Resources**: Leverages block RAMs (BRAM) and DSP slices to ensure efficient scaling for large polynomials.
 
-```mermaid
-flowchart LR
-    In[Input] --> Stage0
-    
-    subgraph Stage0 [Stage 0]
-        direction TB
-        BFU0[Butterfly Unit] <--> MEM0[(MEM\ndepth: N/2)]
-    end
-    
-    subgraph Stage1 [Stage 1]
-        direction TB
-        BFU1[Butterfly Unit] <--> MEM1[(MEM\ndepth: N/4)]
-    end
-    
-    subgraph StageN [Stage \log N - 1]
-        direction TB
-        BFUN[Butterfly Unit] <--> MEMN[(MEM\ndepth: 1)]
-    end
-    
-    Stage0 --> Stage1
-    Stage1 -.-> StageN
-    StageN --> Out[Output]
-```
+![SDF Pipeline Architecture](docs/diagrams/sdf_pipeline_architecture.png)
 
 ### 2. Fully Unrolled Combinational (`ntt_optimized_combinational.v`)
 An architecture optimized for absolute minimum latency, flattening the butterfly network into a fully combinational path.
@@ -129,6 +75,5 @@ Future iterations will transition from singular monolithic polynomials to a Modu
 ## Authors
 
 **Pranay Arvind Patil** (24110252) - B.Tech 2024 ICDT  
-**Vansh Goel** (24110379) - B.Tech 2024 EE  
 Advisor: **Prof. Joycee Mekie**  
 Indian Institute of Technology, Gandhinagar
